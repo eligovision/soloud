@@ -1,26 +1,26 @@
 /*
- SoLoud audio engine
- Copyright (c) 2013-2018 Jari Komppa
+SoLoud audio engine
+Copyright (c) 2013-2018 Jari Komppa
 
- This software is provided 'as-is', without any express or implied
- warranty. In no event will the authors be held liable for any damages
- arising from the use of this software.
+This software is provided 'as-is', without any express or implied
+warranty. In no event will the authors be held liable for any damages
+arising from the use of this software.
 
- Permission is granted to anyone to use this software for any purpose,
- including commercial applications, and to alter it and redistribute it
- freely, subject to the following restrictions:
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
 
- 1. The origin of this software must not be misrepresented; you must not
- claim that you wrote the original software. If you use this software
- in a product, an acknowledgment in the product documentation would be
- appreciated but is not required.
+   1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
 
- 2. Altered source versions must be plainly marked as such, and must not be
- misrepresented as being the original software.
+   2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
 
- 3. This notice may not be removed or altered from any source
- distribution.
- */
+   3. This notice may not be removed or altered from any source
+   distribution.
+*/
 
 #include <string.h>
 #include <stdio.h>
@@ -29,6 +29,9 @@
 #include "soloud_wav.h"
 #include "soloud_file.h"
 #include "stb_vorbis.h"
+#include "dr_mp3.h"
+#include "dr_wav.h"
+#include "dr_flac.h"
 
 namespace SoLoud
 {
@@ -39,7 +42,7 @@ namespace SoLoud
 	}
 
 	unsigned int WavInstance::getAudio(float *aBuffer, unsigned int aSamplesToRead, unsigned int aBufferSize)
-	{
+	{		
 		if (mParent->mData == NULL)
 			return 0;
 
@@ -79,7 +82,7 @@ namespace SoLoud
 		mData = NULL;
 		mSampleCount = 0;
 	}
-
+	
 	Wav::~Wav()
 	{
 		stop();
@@ -90,145 +93,48 @@ namespace SoLoud
 
 	result Wav::loadwav(MemoryFile *aReader)
 	{
-		int filesize = aReader->read32();
-		if (aReader->read32() != MAKEDWORD('W', 'A', 'V', 'E'))
+		drwav decoder;
+
+		if (!drwav_init_memory(&decoder, aReader->getMemPtr(), aReader->length()))
 		{
 			return FILE_LOAD_FAILED;
 		}
-		filesize -= 4;
 
-		int channels = 0;
-		int bitspersample = 0;
+		drwav_uint64 samples = decoder.totalSampleCount / decoder.channels;// drwav_read_pcm_frames_f32(&decoder, ((drmp3_uint64)1) << 62, NULL);
 
-		while (filesize > 0)
+		if (!samples)
 		{
-			int id = aReader->read32();
-			int chunkSize = aReader->read32();
-			if (chunkSize & 1)
-			{
-				chunkSize++;
-			}
-			filesize -= 8;
-
-			if (aReader->length() < aReader->pos() + chunkSize)
-			{
-				return FILE_LOAD_FAILED;
-			}
-
-			int chunkStart = aReader->pos();
-
-			if (id == MAKEDWORD('f', 'm', 't', ' '))
-			{
-				int audioformat = aReader->read16();
-				channels = aReader->read16();
-				mBaseSamplerate = (float)aReader->read32();
-				/*int byterate =*/ aReader->read32();
-				/*int blockalign =*/ aReader->read16();
-				bitspersample = aReader->read16();
-
-				if (audioformat != 1 || (bitspersample != 8 && bitspersample != 16 && bitspersample != 24))
-				{
-					return FILE_LOAD_FAILED;
-				}
-			}
-			else if (id == MAKEDWORD('d', 'a', 't', 'a'))
-			{
-				if (channels == 0 || bitspersample == 0)
-					return FILE_LOAD_FAILED;
-
-				int readchannels = 1;
-
-				if (channels > 1)
-				{
-					readchannels = 2;
-					mChannels = 2;
-				}
-
-				int samples = (chunkSize / (bitspersample / 8)) / channels;
-
-				mData = new float[samples * readchannels];
-				mSampleCount = samples;
-				int i, j;
-				if (bitspersample == 8)
-				{
-					unsigned char * dataptr = (unsigned char*)(aReader->getMemPtr() + aReader->pos());
-					for (i = 0; i < samples; i++)
-					{
-						for (j = 0; j < channels; j++)
-						{
-							if (j == 0)
-							{
-								mData[i] = ((signed)*dataptr - 128) / (float)0x80;
-							}
-							else
-							{
-								if (readchannels > 1 && j == 1)
-								{
-									mData[i + samples] = ((signed)*dataptr - 128) / (float)0x80;
-								}
-							}
-							dataptr++;
-						}
-					}
-				}
-				else if (bitspersample == 16)
-				{
-					unsigned short * dataptr = (unsigned short*)(aReader->getMemPtr() + aReader->pos());
-					for (i = 0; i < samples; i++)
-					{
-						for (j = 0; j < channels; j++)
-						{
-							if (j == 0)
-							{
-								mData[i] = ((signed short)*dataptr) / (float)0x8000;
-							}
-							else
-							{
-								if (readchannels > 1 && j == 1)
-								{
-									mData[i + samples] = ((signed short)*dataptr) / (float)0x8000;
-								}
-							}
-							dataptr++;
-						}
-					}
-				}
-				else
-					if (bitspersample == 24)
-					{
-						unsigned char * dataptr = (unsigned char*)(aReader->getMemPtr() + aReader->pos());
-						for (i = 0; i < samples; i++)
-						{
-							for (j = 0; j < channels; j++)
-							{
-								if (j == 0)
-								{
-									mData[i] = ((dataptr[0] << 8) | (dataptr[1] << 16) | (dataptr[2] << 24)) / (float)0x80000000;
-								}
-								else
-								{
-									if (readchannels > 1 && j == 1)
-									{
-										mData[i + samples] = ((dataptr[0] << 8) | (dataptr[1] << 16) | (dataptr[2] << 24)) / (float)0x80000000;
-									}
-								}
-								dataptr += 3;
-							}
-						}
-					}
-			}
-
-			// skip rest of chunk
-			aReader->seek(chunkStart + chunkSize);
-
-			filesize -= chunkSize;
+			drwav_uninit(&decoder);
+			return FILE_LOAD_FAILED;
 		}
 
-		return 0;
+		mData = new float[(unsigned int)(samples * decoder.channels)];
+		mBaseSamplerate = (float)decoder.sampleRate;
+		mSampleCount = (unsigned int)samples;
+		mChannels = decoder.channels;
+//		drwav_seek_to_pcm_frame(&decoder, 0);
+
+		unsigned int i, j, k;
+		for (i = 0; i < mSampleCount; i += 512)
+		{
+			float tmp[512 * 2];
+			unsigned int blockSize = (mSampleCount - i) > 512 ? 512 : mSampleCount - i;
+			drwav_read_pcm_frames_f32(&decoder, blockSize, tmp);
+			for (j = 0; j < blockSize; j++)
+			{
+				for (k = 0; k < decoder.channels; k++)
+				{
+					mData[k * mSampleCount + i + j] = tmp[j * decoder.channels + k];
+				}
+			}
+		}
+		drwav_uninit(&decoder);
+
+		return SO_NO_ERROR;
 	}
 
 	result Wav::loadogg(MemoryFile *aReader)
-	{
+	{	
 		int e = 0;
 		stb_vorbis *vorbis = 0;
 		vorbis = stb_vorbis_open_memory(aReader->getMemPtr(), aReader->length(), &e, 0);
@@ -238,9 +144,9 @@ namespace SoLoud
 			return FILE_LOAD_FAILED;
 		}
 
-		stb_vorbis_info info = stb_vorbis_get_info(vorbis);
+        stb_vorbis_info info = stb_vorbis_get_info(vorbis);
 		mBaseSamplerate = (float)info.sample_rate;
-		int samples = stb_vorbis_stream_length_in_samples(vorbis);
+        int samples = stb_vorbis_stream_length_in_samples(vorbis);
 
 		int readchannels = 1;
 		if (info.channels > 1)
@@ -254,11 +160,11 @@ namespace SoLoud
 		while(1)
 		{
 			float **outputs;
-			int n = stb_vorbis_get_frame_float(vorbis, NULL, &outputs);
+            int n = stb_vorbis_get_frame_float(vorbis, NULL, &outputs);
 			if (n == 0)
-			{
+            {
 				break;
-			}
+            }
 			if (readchannels == 1)
 			{
 				memcpy(mData + samples, outputs[0],sizeof(float) * n);
@@ -270,29 +176,118 @@ namespace SoLoud
 			}
 			samples += n;
 		}
-		stb_vorbis_close(vorbis);
+        stb_vorbis_close(vorbis);
 
 		return 0;
 	}
 
-	result Wav::testAndLoadFile(MemoryFile *aReader)
+	result Wav::loadmp3(MemoryFile *aReader)
 	{
+		drmp3 decoder;
+
+		if (!drmp3_init_memory(&decoder, aReader->getMemPtr(), aReader->length(), NULL))
+		{
+			return FILE_LOAD_FAILED;
+		}
+
+		drmp3_uint64 samples = drmp3_read_pcm_frames_f32(&decoder, ((drmp3_uint64)1) << 62, NULL);
+
+		if (!samples)
+		{
+			drmp3_uninit(&decoder);
+			return FILE_LOAD_FAILED;
+		}
+
+		mData = new float[(unsigned int)(samples * decoder.channels)];
+		mBaseSamplerate = (float)decoder.sampleRate;
+		mSampleCount = (unsigned int)samples;
+		mChannels = decoder.channels;
+		drmp3_seek_to_pcm_frame(&decoder, 0); 
+
+		unsigned int i, j, k;
+		for (i = 0; i<mSampleCount; i += 512)
+		{
+			float tmp[512 * 2];
+			unsigned int blockSize = (mSampleCount - i) > 512 ? 512 : mSampleCount - i;
+			drmp3_read_pcm_frames_f32(&decoder, blockSize, tmp);
+			for (j = 0; j < blockSize; j++) 
+			{
+				for (k = 0; k < decoder.channels; k++) 
+				{
+					mData[k * mSampleCount + i + j] = tmp[j * decoder.channels + k];
+				}
+			}
+		}
+		drmp3_uninit(&decoder);
+
+		return SO_NO_ERROR;
+	}
+
+	result Wav::loadflac(MemoryFile *aReader)
+	{
+		drflac *decoder = drflac_open_memory(aReader->mDataPtr, aReader->mDataLength);
+
+		if (!decoder)
+		{
+			return FILE_LOAD_FAILED;
+		}
+
+		drflac_uint64 samples = drflac_read_pcm_frames_f32(decoder, ((drmp3_uint64)1) << 62, NULL);
+
+		if (!samples)
+		{
+			drflac_close(decoder);
+			return FILE_LOAD_FAILED;
+		}
+
+		mData = new float[(unsigned int)(samples * decoder->channels)];
+		mBaseSamplerate = (float)decoder->sampleRate;
+		mSampleCount = (unsigned int)samples;
+		mChannels = decoder->channels;
+		drflac_seek_to_pcm_frame(decoder, 0);
+
+		unsigned int i, j, k;
+		for (i = 0; i < mSampleCount; i += 512)
+		{
+			float tmp[512 * 2];
+			unsigned int blockSize = (mSampleCount - i) > 512 ? 512 : mSampleCount - i;
+			drflac_read_pcm_frames_f32(decoder, blockSize, tmp);
+			for (j = 0; j < blockSize; j++)
+			{
+				for (k = 0; k < decoder->channels; k++)
+				{
+					mData[k * mSampleCount + i + j] = tmp[j * decoder->channels + k];
+				}
+			}
+		}
+		drflac_close(decoder);
+
+		return SO_NO_ERROR;
+	}
+
+    result Wav::testAndLoadFile(MemoryFile *aReader)
+    {
 		delete[] mData;
 		mData = 0;
 		mSampleCount = 0;
 		mChannels = 1;
-		int tag = aReader->read32();
-		if (tag == MAKEDWORD('O','g','g','S'))
-		{
+        int tag = aReader->read32();
+		if (tag == MAKEDWORD('O','g','g','S')) 
+        {
 			return loadogg(aReader);
 
-		}
-		else if (tag == MAKEDWORD('R','I','F','F'))
-		{
+		} 
+        else if (tag == MAKEDWORD('R','I','F','F')) 
+        {
 			return loadwav(aReader);
 		}
+		else if (loadmp3(aReader) == SO_NO_ERROR)
+		{
+			return SO_NO_ERROR;
+		}
+
 		return FILE_LOAD_FAILED;
-	}
+    }
 
 	result Wav::load(const char *aFilename)
 	{
@@ -313,7 +308,7 @@ namespace SoLoud
 		stop();
 
 		MemoryFile dr;
-		dr.openMem(aMem, aLength, aCopy, aTakeOwnership);
+        dr.openMem(aMem, aLength, aCopy, aTakeOwnership);
 		return testAndLoadFile(&dr);
 	}
 
@@ -351,7 +346,7 @@ namespace SoLoud
 			return INVALID_PARAMETER;
 		stop();
 		delete[] mData;
-		mData = new float[aLength];
+		mData = new float[aLength];	
 		mSampleCount = aLength / aChannels;
 		mChannels = aChannels;
 		mBaseSamplerate = aSamplerate;
@@ -397,5 +392,4 @@ namespace SoLoud
 		mBaseSamplerate = aSamplerate;
 		return SO_NO_ERROR;
 	}
-	
 };
