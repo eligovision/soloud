@@ -6,7 +6,8 @@ set (CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake;${CMAKE_MODULE_PATH}")
 set (CMAKE_POSITION_INDEPENDENT_CODE ON)
 #INCLUDE (StandartIncludes)
 
-include_directories (include)
+include_directories (../include)
+
 include (Configure.cmake)
 #INCLUDE (InstallIncludes.cmake)
 #INCLUDE (InstallStaticData.cmake)
@@ -21,11 +22,11 @@ if (NOT DEFINED LIB_POSTFIX)
 	set (LIB_POSTFIX "")
 endif ()
 
-add_subdirectory (src)
+include (src.cmake)
 
 # Demos
 IF (SOLOUD_BUILD_DEMOS)
-	add_subdirectory (demos)
+	include (demos.cmake)
 endif ()
 
 include (InstallExport)
