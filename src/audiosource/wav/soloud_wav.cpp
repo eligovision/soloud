@@ -112,12 +112,11 @@ namespace SoLoud
 		mBaseSamplerate = (float)decoder.sampleRate;
 		mSampleCount = (unsigned int)samples;
 		mChannels = decoder.channels;
-//		drwav_seek_to_pcm_frame(&decoder, 0);
 
 		unsigned int i, j, k;
 		for (i = 0; i < mSampleCount; i += 512)
 		{
-			float tmp[512 * 2];
+			float tmp[512 * MAX_CHANNELS];
 			unsigned int blockSize = (mSampleCount - i) > 512 ? 512 : mSampleCount - i;
 			drwav_read_pcm_frames_f32(&decoder, blockSize, tmp);
 			for (j = 0; j < blockSize; j++)
@@ -148,13 +147,15 @@ namespace SoLoud
 		mBaseSamplerate = (float)info.sample_rate;
         int samples = stb_vorbis_stream_length_in_samples(vorbis);
 
-		int readchannels = 1;
-		if (info.channels > 1)
+		if (info.channels > MAX_CHANNELS)
 		{
-			readchannels = 2;
-			mChannels = 2;
+			mChannels = MAX_CHANNELS;
 		}
-		mData = new float[samples * readchannels];
+		else
+		{
+			mChannels = info.channels;
+		}
+		mData = new float[samples * mChannels];
 		mSampleCount = samples;
 		samples = 0;
 		while(1)
@@ -165,15 +166,11 @@ namespace SoLoud
             {
 				break;
             }
-			if (readchannels == 1)
-			{
-				memcpy(mData + samples, outputs[0],sizeof(float) * n);
-			}
-			else
-			{
-				memcpy(mData + samples, outputs[0],sizeof(float) * n);
-				memcpy(mData + samples + mSampleCount, outputs[1],sizeof(float) * n);
-			}
+
+			int ch;
+			for (ch = 0; ch < mChannels; ch++)
+				memcpy(mData + samples + mSampleCount * ch, outputs[ch], sizeof(float) * n);
+
 			samples += n;
 		}
         stb_vorbis_close(vorbis);
@@ -207,7 +204,7 @@ namespace SoLoud
 		unsigned int i, j, k;
 		for (i = 0; i<mSampleCount; i += 512)
 		{
-			float tmp[512 * 2];
+			float tmp[512 * MAX_CHANNELS];
 			unsigned int blockSize = (mSampleCount - i) > 512 ? 512 : mSampleCount - i;
 			drmp3_read_pcm_frames_f32(&decoder, blockSize, tmp);
 			for (j = 0; j < blockSize; j++) 
@@ -249,7 +246,7 @@ namespace SoLoud
 		unsigned int i, j, k;
 		for (i = 0; i < mSampleCount; i += 512)
 		{
-			float tmp[512 * 2];
+			float tmp[512 * MAX_CHANNELS];
 			unsigned int blockSize = (mSampleCount - i) > 512 ? 512 : mSampleCount - i;
 			drflac_read_pcm_frames_f32(decoder, blockSize, tmp);
 			for (j = 0; j < blockSize; j++)
@@ -280,6 +277,10 @@ namespace SoLoud
         else if (tag == MAKEDWORD('R','I','F','F')) 
         {
 			return loadwav(aReader);
+		}
+		else if (tag == MAKEDWORD('f', 'L', 'a', 'C'))
+		{
+			return loadflac(aReader);
 		}
 		else if (loadmp3(aReader) == SO_NO_ERROR)
 		{
