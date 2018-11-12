@@ -1,6 +1,6 @@
 /*
 SoLoud audio engine
-Copyright (c) 2013-2015 Jari Komppa
+Copyright (c) 2013-2018 Jari Komppa
 
 This software is provided 'as-is', without any express or implied
 warranty. In no event will the authors be held liable for any damages
@@ -25,11 +25,11 @@ freely, subject to the following restrictions:
 
 #include "soloud.h"
 
-#if !defined(WITH_SDL2_STATIC)
+#if !defined(WITH_SDL2)
 
 namespace SoLoud
 {
-	result sdl2static_init(SoLoud::Soloud *aSoloud, unsigned int aFlags, unsigned int aSamplerate, unsigned int aBuffer)
+	result sdl2_init(SoLoud::Soloud *aSoloud, unsigned int aFlags, unsigned int aSamplerate, unsigned int aBuffer)
 	{
 		return NOT_IMPLEMENTED;
 	}
@@ -38,18 +38,36 @@ namespace SoLoud
 #else
 
 #if defined(_MSC_VER)
-#include <SDL.h>
+#include "SDL.h"
 #else
-#include <SDL2/SDL.h>
+#include "SDL/SDL.h"
 #endif
 #include <math.h>
+
+
+extern "C"
+{
+	int dll_SDL2_found();
+
+	Uint32 dll_SDL2_WasInit(Uint32 flags);
+	int dll_SDL2_InitSubSystem(Uint32 flags);
+	SDL_AudioDeviceID dll_SDL2_OpenAudioDevice(const char*          device,
+											   int                  iscapture,
+											   const SDL_AudioSpec* desired,
+											   SDL_AudioSpec*       obtained,
+											   int                  allowed_changes);
+	void dll_SDL2_CloseAudioDevice(SDL_AudioDeviceID dev);
+	void dll_SDL2_PauseAudioDevice(SDL_AudioDeviceID dev,
+								   int               pause_on);
+};
+
 
 namespace SoLoud
 {
 	static SDL_AudioSpec gActiveAudioSpec;
 	static SDL_AudioDeviceID gAudioDeviceID;
 
-	void soloud_sdl2static_audiomixer(void *userdata, Uint8 *stream, int len)
+	void soloud_sdl2_audiomixer(void *userdata, Uint8 *stream, int len)
 	{
 		short *buf = (short*)stream;
 		SoLoud::Soloud *soloud = (SoLoud::Soloud *)userdata;
@@ -65,16 +83,19 @@ namespace SoLoud
 		}
 	}
 
-	static void soloud_sdl2static_deinit(SoLoud::Soloud *aSoloud)
+	static void soloud_sdl2_deinit(SoLoud::Soloud *aSoloud)
 	{
-		SDL_CloseAudioDevice(gAudioDeviceID);
+		dll_SDL2_CloseAudioDevice(gAudioDeviceID);
 	}
 
-	result sdl2static_init(SoLoud::Soloud *aSoloud, unsigned int aFlags, unsigned int aSamplerate, unsigned int aBuffer, unsigned int aChannels)
+	result sdl2_init(SoLoud::Soloud *aSoloud, unsigned int aFlags, unsigned int aSamplerate, unsigned int aBuffer, unsigned int aChannels)
 	{
-		if (!SDL_WasInit(SDL_INIT_AUDIO))
+		if (!dll_SDL2_found())
+			return DLL_NOT_FOUND;
+
+		if (!dll_SDL2_WasInit(SDL_INIT_AUDIO))
 		{
-			if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0)
+			if (dll_SDL2_InitSubSystem(SDL_INIT_AUDIO) < 0)
 			{
 				return UNKNOWN_ERROR;
 			}
@@ -85,14 +106,14 @@ namespace SoLoud
 		as.format = AUDIO_F32;
 		as.channels = aChannels;
 		as.samples = aBuffer;
-		as.callback = soloud_sdl2static_audiomixer;
+		as.callback = soloud_sdl2_audiomixer;
 		as.userdata = (void*)aSoloud;
 
-		gAudioDeviceID = SDL_OpenAudioDevice(NULL, 0, &as, &gActiveAudioSpec, SDL_AUDIO_ALLOW_ANY_CHANGE & ~(SDL_AUDIO_ALLOW_FORMAT_CHANGE | SDL_AUDIO_ALLOW_CHANNELS_CHANGE));
+		gAudioDeviceID = dll_SDL2_OpenAudioDevice(NULL, 0, &as, &gActiveAudioSpec, SDL_AUDIO_ALLOW_ANY_CHANGE & ~(SDL_AUDIO_ALLOW_FORMAT_CHANGE | SDL_AUDIO_ALLOW_CHANNELS_CHANGE));
 		if (gAudioDeviceID == 0)
 		{
 			as.format = AUDIO_S16;
-			gAudioDeviceID = SDL_OpenAudioDevice(NULL, 0, &as, &gActiveAudioSpec, SDL_AUDIO_ALLOW_ANY_CHANGE & ~(SDL_AUDIO_ALLOW_FORMAT_CHANGE | SDL_AUDIO_ALLOW_CHANNELS_CHANGE));
+			gAudioDeviceID = dll_SDL2_OpenAudioDevice(NULL, 0, &as, &gActiveAudioSpec, SDL_AUDIO_ALLOW_ANY_CHANGE & ~(SDL_AUDIO_ALLOW_FORMAT_CHANGE | SDL_AUDIO_ALLOW_CHANNELS_CHANGE));
 			if (gAudioDeviceID == 0)
 			{
 				return UNKNOWN_ERROR;
@@ -101,11 +122,12 @@ namespace SoLoud
 
 		aSoloud->postinit(gActiveAudioSpec.freq, gActiveAudioSpec.samples, aFlags, gActiveAudioSpec.channels);
 
-		aSoloud->mBackendCleanupFunc = soloud_sdl2static_deinit;
+		aSoloud->mBackendCleanupFunc = soloud_sdl2_deinit;
 
-		SDL_PauseAudioDevice(gAudioDeviceID, 0);
-		aSoloud->mBackendString = "SDL2 (static)";
+		dll_SDL2_PauseAudioDevice(gAudioDeviceID, 0);
+        aSoloud->mBackendString = "SDL2 (dynamic)";
 		return 0;
-	}	
+	}
+	
 };
 #endif

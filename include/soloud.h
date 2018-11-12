@@ -43,6 +43,18 @@ freely, subject to the following restrictions:
 #endif
 #endif
 
+#ifdef WITH_SDL
+#undef WITH_SDL2
+#undef WITH_SDL1
+#define WITH_SDL1
+#define WITH_SDL2
+#endif
+
+#ifdef WITH_SDL_STATIC
+#undef WITH_SDL1_STATIC
+#define WITH_SDL1_STATIC
+#endif
+
 #ifndef M_PI
 #define M_PI 3.14159265359
 #endif
@@ -75,8 +87,8 @@ freely, subject to the following restrictions:
 // Use linear resampler
 #define RESAMPLER_LINEAR
 
-// 1)mono, 2)stereo 4)quad 6)5.1
-#define MAX_CHANNELS 6
+// 1)mono, 2)stereo 4)quad 6)5.1 8)7.1
+#define MAX_CHANNELS 8
 
 //
 /////////////////////////////////////////////////////////////////////
@@ -157,7 +169,7 @@ namespace SoLoud
 		enum BACKENDS
 		{
 			AUTO = 0,
-			SDL,
+			SDL1,
 			SDL2,
 			PORTAUDIO,
 			WINMM,
@@ -206,6 +218,8 @@ namespace SoLoud
 
 		// Set speaker position in 3d space
 		result setSpeakerPosition(unsigned int aChannel, float aX, float aY, float aZ);
+		// Get speaker position in 3d space
+		result getSpeakerPosition(unsigned int aChannel, float &aX, float &aY, float &aZ);
 
 		// Start playing a sound. Returns voice handle, which can be ignored or used to alter the playing sound's parameters. Negative volume means to use default.
 		handle play(AudioSource &aSound, float aVolume = -1.0f, float aPan = 0.0f, bool aPaused = 0, unsigned int aBus = 0);
@@ -337,6 +351,9 @@ namespace SoLoud
 
 		// Get 256 floats of wave data for visualization. Visualization has to be enabled before use.
 		float *getWave();
+
+		// Get approximate output volume for a channel for visualization. Visualization has to be enabled before use.
+		float getApproximateVolume(unsigned int aChannel);
 
 		// Get current loop count. Returns 0 if handle is not valid. (All audio sources may not update loop count)
 		unsigned int getLoopCount(handle aVoiceHandle);
@@ -477,6 +494,8 @@ namespace SoLoud
 		void update3dVoices(unsigned int *aVoiceList, unsigned int aVoiceCount);
 		// Clip the samples in the buffer
 		void clip(AlignedFloatBuffer &aBuffer, AlignedFloatBuffer &aDestBuffer, unsigned int aSamples, float aVolume0, float aVolume1);
+		// Approximate volume for channels.
+		float mVisualizationChannelVolume[MAX_CHANNELS];
 		// Mono-mixed wave data for visualization and for visualization FFT input
 		float mVisualizationWaveData[256];
 		// FFT output data
