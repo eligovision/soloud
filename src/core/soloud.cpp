@@ -121,6 +121,8 @@ namespace SoLoud
 		mActiveVoiceDirty = true;
 		mActiveVoiceCount = 0;
 		int i;
+		for (i = 0; i < VOICE_COUNT; i++)
+			mActiveVoice[i] = 0;
 		for (i = 0; i < FILTERS_PER_STREAM; i++)
 		{
 			mFilter[i] = NULL;
@@ -683,6 +685,8 @@ namespace SoLoud
 		float vd = (aVolume1 - aVolume0) / aSamples;
 		float v = aVolume0;
 		unsigned int i, j, c, d;
+		unsigned int samplequads = (aSamples + 3) / 4; // rounded up
+
 		// Clip
 		if (mFlags & CLIP_ROUNDOFF)
 		{
@@ -706,7 +710,7 @@ namespace SoLoud
 			{
 				__m128 vol = _mm_load_ps(volumes.mData);
 
-				for (i = 0; i < aSamples / 4; i++)
+				for (i = 0; i < samplequads; i++)
 				{
 					//float f1 = origdata[c] * v;	c++; v += vd;
 					__m128 f = _mm_load_ps(&aBuffer.mData[c]);
@@ -761,7 +765,7 @@ namespace SoLoud
 			for (j = 0; j < mChannels; j++)
 			{
 				__m128 vol = _mm_load_ps(volumes.mData);
-				for (i = 0; i < aSamples / 4; i++)
+				for (i = 0; i < samplequads; i++) 
 				{
 					//float f1 = aBuffer.mData[c] * v; c++; v += vd;
 					__m128 f = _mm_load_ps(&aBuffer.mData[c]);
@@ -787,6 +791,7 @@ namespace SoLoud
 		float vd = (aVolume1 - aVolume0) / aSamples;
 		float v = aVolume0;
 		unsigned int i, j, c, d;
+		unsigned int samplequads = (aSamples + 3) / 4; // rounded up
 		// Clip
 		if (mFlags & CLIP_ROUNDOFF)
 		{
@@ -795,7 +800,7 @@ namespace SoLoud
 			for (j = 0; j < mChannels; j++)
 			{
 				v = aVolume0;
-				for (i = 0; i < aSamples/4; i++)
+				for (i = 0; i < samplequads; i++)
 				{
 					float f1 = aBuffer.mData[c] * v; c++; v += vd;
 					float f2 = aBuffer.mData[c] * v; c++; v += vd;
@@ -821,7 +826,7 @@ namespace SoLoud
 			for (j = 0; j < mChannels; j++)
 			{
 				v = aVolume0;
-				for (i = 0; i < aSamples / 4; i++)
+				for (i = 0; i < samplequads; i++) 
 				{
 					float f1 = aBuffer.mData[c] * v; c++; v += vd;
 					float f2 = aBuffer.mData[c] * v; c++; v += vd;
