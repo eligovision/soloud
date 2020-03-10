@@ -1,9 +1,6 @@
 #include "sndbuffer.h"
 #include "sndrender.h"
-
-#if defined(__MACH__)
-#	include <stdlib.h>
-#endif
+#include <malloc.h>
 #include <memory.h>
 
 SNDBUFFER::SNDBUFFER(unsigned aSize) {
