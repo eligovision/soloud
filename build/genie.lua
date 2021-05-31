@@ -850,32 +850,6 @@ end
 
 if (WITH_TOOLS == 1) then
 
-	project "tedsid2dump"
-		kind "ConsoleApp"
-		language "C++"
-		files {
-		  "../src/tools/tedsid2dump/**.cpp"
-		}
-		targetname "tedsid2dump"
-end
-
--- 8< -- 8< -- 8< -- 8< -- 8< -- 8< -- 8< -- 8< -- 8< -- 8< --
-
-if (WITH_TOOLS == 1) then
-
-	project "ay2dump"
-		kind "ConsoleApp"
-		language "C++"
-		files {
-		  "../src/tools/ay2dump/*.c*"
-		}
-		targetname "ay2dump"
-end
-
--- 8< -- 8< -- 8< -- 8< -- 8< -- 8< -- 8< -- 8< -- 8< -- 8< --
-
-if (WITH_TOOLS == 1) then
-
 	project "resamplerlab"
 		kind "ConsoleApp"
 		language "C++"

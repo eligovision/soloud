@@ -1,6 +1,6 @@
 /*
-AY module for SoLoud audio engine
-Copyright (c) 2020 Jari Komppa
+SoLoud audio engine
+Copyright (c) 2013-2021 Jari Komppa
 
 This software is provided 'as-is', without any express or implied
 warranty. In no event will the authors be held liable for any damages
@@ -22,48 +22,55 @@ freely, subject to the following restrictions:
    distribution.
 */
 
-#ifndef AY_H
-#define AY_H
+#ifndef ADSR_H
+#define ADSR_H
 
 #include "soloud.h"
 
-class ChipPlayer;
-
 namespace SoLoud
 {
-    class Ay;
-	class File;
-	class AyInstance : public AudioSourceInstance
+	class ADSR
 	{
 	public:
-		Ay *mParent;
-		ChipPlayer *mChip;
-		int mPos;
+		float mA, mD, mS, mR;
 
-		AyInstance(Ay *aParent);
-		~AyInstance();
-		virtual unsigned int getAudio(float *aBuffer, unsigned int aSamplesToRead, unsigned int aBufferSize);
-		virtual bool hasEnded();
-		virtual result rewind();
-		virtual float getInfo(unsigned int aInfoKey);
-	};
+		ADSR()
+		{
+			mA = 0.0f;
+			mD = 0.0f;
+			mS = 1.0f;
+			mR = 0.0f;
+		}
 
-	class Ay : public AudioSource
-	{
-	public:
-		bool mYm;
-		int mChipspeed;
-		int mCpuspeed;
-		int mLooppos;
-		int mLength;
-		unsigned short* mOps;
-	public:
-		Ay();
-		~Ay();
-		result load(const char *aFilename);
-		result loadFile(File *aFile);
-		result loadMem(const unsigned char* aMem, unsigned int aLength, bool aCopy, bool aTakeOwnership);
-		virtual AudioSourceInstance *createInstance();
+		ADSR(float aA, float aD, float aS, float aR)
+		{
+			mA = aA;
+			mD = aD;
+			mS = aS;
+			mR = aR;
+		}
+		
+		float val(float aT, float aRelTime)
+		{
+			if (aT < mA)
+			{
+				return aT / mA;
+			}
+			aT -= mA;
+			if (aT < mD)
+			{
+				return 1.0f - ((aT / mD)) * (1.0f - mS);
+			}
+			aT -= mD;
+			if (aT < aRelTime)
+				return mS;
+			aT -= aRelTime;
+			if (aT >= mR)
+			{
+				return 0.0f;
+			}
+			return (1.0f - aT / mR) * mS;
+		}
 	};
 };
 
