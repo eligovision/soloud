@@ -46,7 +46,7 @@ namespace SoLoud
 #endif
 
 // Error logging.
-#if defined( __ANDROID__ ) 
+#if defined( __ANDROID__ )
 #  include <android/log.h>
 #  define LOG_ERROR(...) \
    __android_log_print( ANDROID_LOG_ERROR, "SoLoud", __VA_ARGS__ )
@@ -70,12 +70,7 @@ namespace SoLoud
 
 		~BackendData()
 		{
-			// Wait until thread is done.
-			threadrun++;
-			while (threadrun == 1)
-			{
-				Thread::sleep(10);
-			}
+			stopThread();
 
 			if(playerObj)
 			{
@@ -96,6 +91,23 @@ namespace SoLoud
 			{
 				delete [] outputBuffers[idx];
 			}
+		}
+
+		bool stopThread()
+		{
+			if (!threadHandle)
+				return false;
+
+			// Wait until thread is done.
+			threadrun++;
+			while (threadrun == 1)
+				Thread::sleep(10);
+
+			Thread::wait(threadHandle);
+			Thread::release(threadHandle);
+			threadHandle = NULL;
+
+			return true;
 		}
 
 		// Engine.
@@ -122,6 +134,7 @@ namespace SoLoud
 		int buffersQueued;
 		int activeBuffer;
 		volatile int threadrun;
+		Thread::ThreadHandle threadHandle;
 
 		SLDataLocator_AndroidSimpleBufferQueue inLocator;
 	};
@@ -145,7 +158,7 @@ namespace SoLoud
 			data->activeBuffer = (data->activeBuffer + 1) % NUM_BUFFERS;
 			short * nextBuffer = data->outputBuffers[data->activeBuffer];
 
-			// Mix this buffer. 
+			// Mix this buffer.
 			const int bufferSizeBytes = data->bufferSize * data->channels * sizeof(short);
 			(*data->playerBufferQueue)->Enqueue(data->playerBufferQueue, outputBuffer, bufferSizeBytes);
 			++data->buffersQueued;
@@ -166,6 +179,27 @@ namespace SoLoud
 			Thread::sleep(1);
 		}
 		data->threadrun++;
+	}
+
+	result soloud_opensles_pause(SoLoud::Soloud *aSoloud)
+	{
+		BackendData *data = static_cast<BackendData*>(aSoloud->mBackendData);
+		if (data->stopThread())
+			return 0;
+
+		return UNKNOWN_ERROR;
+	}
+
+	result soloud_opensles_resume(SoLoud::Soloud *aSoloud)
+	{
+		BackendData *data = static_cast<BackendData*>(aSoloud->mBackendData);
+		if (data->threadrun == 0)
+			return UNKNOWN_ERROR;	// already running
+
+		data->threadrun = 0;
+		data->threadHandle = Thread::createThread(opensles_thread, (void*)aSoloud);
+
+		return 0;
 	}
 
 	static void SLAPIENTRY soloud_opensles_play_callback(SLPlayItf player, void *context, SLuint32 event)
@@ -200,7 +234,7 @@ namespace SoLoud
 			return UNKNOWN_ERROR;
 		}
 
-		// Realize and get engine interfaxce.	
+		// Realize and get engine interface.
 		(*data->engineObj)->Realize(data->engineObj, SL_BOOLEAN_FALSE);
 		if((*data->engineObj)->GetInterface(data->engineObj, SL_IID_ENGINE, &data->engine) != SL_RESULT_SUCCESS)
 		{
@@ -246,7 +280,7 @@ namespace SoLoud
 		{
 			format.channelMask = SL_SPEAKER_FRONT_CENTER;
 		}
-		 
+
 		SLDataSource src;
 		src.pLocator = &data->inLocator;
 		src.pFormat = &format;
@@ -254,7 +288,7 @@ namespace SoLoud
 		// Output mix.
 		data->outLocator.locatorType = SL_DATALOCATOR_OUTPUTMIX;
 		data->outLocator.outputMix = data->outputMixObj;
-		 
+
 		data->dstDataSink.pLocator = &data->outLocator;
 		data->dstDataSink.pFormat = NULL;
 
@@ -262,14 +296,14 @@ namespace SoLoud
 		{
 			const SLInterfaceID ids[] = { SL_IID_VOLUME, SL_IID_ANDROIDSIMPLEBUFFERQUEUE };
 			const SLboolean req[] = { SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE };
- 
+
 			(*data->engine)->CreateAudioPlayer(data->engine, &data->playerObj, &src, &data->dstDataSink, sizeof(ids) / sizeof(ids[0]), ids, req);
-		 
+
 			(*data->playerObj)->Realize(data->playerObj, SL_BOOLEAN_FALSE);
-	 
+
 			(*data->playerObj)->GetInterface(data->playerObj, SL_IID_PLAY, &data->player);
 			(*data->playerObj)->GetInterface(data->playerObj, SL_IID_VOLUME, &data->playerVol);
- 
+
 			(*data->playerObj)->GetInterface(data->playerObj, SL_IID_ANDROIDSIMPLEBUFFERQUEUE, &data->playerBufferQueue);
 		}
 
@@ -283,12 +317,15 @@ namespace SoLoud
 		//
 		aSoloud->postinit_internal(aSamplerate,data->bufferSize,aFlags,2);
 		aSoloud->mBackendCleanupFunc = soloud_opensles_deinit;
+		aSoloud->mBackendPauseFunc = soloud_opensles_pause;
+		aSoloud->mBackendResumeFunc = soloud_opensles_resume;
 
 		LOG_INFO( "Creating audio thread." );
-		Thread::createThread(opensles_thread, (void*)aSoloud);
+		data->threadHandle = Thread::createThread(opensles_thread, (void*)aSoloud);
 
 		aSoloud->mBackendString = "OpenSL ES";
+
 		return SO_NO_ERROR;
-	}	
+	}
 };
 #endif
