@@ -21,10 +21,10 @@ freely, subject to the following restrictions:
    3. This notice may not be removed or altered from any source
    distribution.
 */
+#include <iostream>
 #include <stdlib.h>
 
 #include "soloud.h"
-
 #if !defined(WITH_SDL2_STATIC)
 
 namespace SoLoud
@@ -45,20 +45,20 @@ namespace SoLoud
 	static SDL_AudioSpec gActiveAudioSpec;
 	static SDL_AudioDeviceID gAudioDeviceID;
 
-	void soloud_sdl2static_audiomixer(void *userdata, Uint8 *stream, int len)
+	void soloud_sdl2static_audiomixer_f32(void *userdata, Uint8 *stream, int len)
 	{
 		short *buf = (short*)stream;
 		SoLoud::Soloud *soloud = (SoLoud::Soloud *)userdata;
-		if (gActiveAudioSpec.format == AUDIO_F32)
-		{
-			int samples = len / (gActiveAudioSpec.channels * sizeof(float));
-			soloud->mix((float *)buf, samples);
-		}
-		else // assume s16 if not float
-		{
-			int samples = len / (gActiveAudioSpec.channels * sizeof(short));
-			soloud->mixSigned16(buf, samples);
-		}
+		int samples = len / (gActiveAudioSpec.channels * sizeof(float));
+		soloud->mix((float *)buf, samples);
+	}
+
+	void soloud_sdl2static_audiomixer_s16(void *userdata, Uint8 *stream, int len)
+	{
+		short *buf = (short*)stream;
+		SoLoud::Soloud *soloud = (SoLoud::Soloud *)userdata;
+		int samples = len / (gActiveAudioSpec.channels * sizeof(short));
+		soloud->mixSigned16(buf, samples);
 	}
 
 	static void soloud_sdl2static_deinit(SoLoud::Soloud *aSoloud)
@@ -75,22 +75,24 @@ namespace SoLoud
 				return UNKNOWN_ERROR;
 			}
 		}
-
 		SDL_AudioSpec as;
 		as.freq = aSamplerate;
 		as.format = AUDIO_F32;
 		as.channels = aChannels;
 		as.samples = aBuffer;
-		as.callback = soloud_sdl2static_audiomixer;
+		as.callback = soloud_sdl2static_audiomixer_f32;
 		as.userdata = (void*)aSoloud;
 
 		gAudioDeviceID = SDL_OpenAudioDevice(NULL, 0, &as, &gActiveAudioSpec, SDL_AUDIO_ALLOW_ANY_CHANGE & ~(SDL_AUDIO_ALLOW_FORMAT_CHANGE | SDL_AUDIO_ALLOW_CHANNELS_CHANGE));
 		if (gAudioDeviceID == 0)
 		{
 			as.format = AUDIO_S16;
+			as.callback = soloud_sdl2static_audiomixer_s16;
+
 			gAudioDeviceID = SDL_OpenAudioDevice(NULL, 0, &as, &gActiveAudioSpec, SDL_AUDIO_ALLOW_ANY_CHANGE & ~(SDL_AUDIO_ALLOW_FORMAT_CHANGE | SDL_AUDIO_ALLOW_CHANNELS_CHANGE));
 			if (gAudioDeviceID == 0)
 			{
+				std::cerr << "sdl2static_init failed: " << SDL_GetError() << std::endl;
 				return UNKNOWN_ERROR;
 			}
 		}
@@ -102,6 +104,6 @@ namespace SoLoud
 		SDL_PauseAudioDevice(gAudioDeviceID, 0);
 		aSoloud->mBackendString = "SDL2 (static)";
 		return 0;
-	}	
+	}
 };
 #endif
