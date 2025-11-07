@@ -25,10 +25,39 @@ distribution.
 #undef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
 
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
+#include <cstring>
+#include <string>
+
 #include "soloud.h"
 #include "soloud_file.h"
+
+namespace {
+#if defined(SOLOUD_WITH_UTF8) && defined(_WIN32)
+	std::wstring utf8_to_wide(const std::string& s)
+	{
+		if (s.empty()) return {};
+		int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s.c_str(), static_cast<int>(s.size()), NULL, 0);
+		if (n <= 0) return {};
+		std::wstring w{};
+		w.resize(n);
+		MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s.c_str(), static_cast<int>(s.size()), &w[0], n);
+		return w;
+	}
+
+	FILE* soloud_fopen(const std::string& filename, const std::string& mode)
+	{
+		std::wstring wfile = utf8_to_wide(filename);
+		std::wstring wmode = utf8_to_wide(mode);
+		return _wfopen(wfile.c_str(), wmode.c_str());
+	}
+#else
+	FILE* soloud_fopen(const std::string& filename, const std::string& mode)
+	{
+		return fopen(filename.c_str(), mode.c_str());
+	}
+#endif
+} // anonymous
 
 namespace SoLoud
 {
@@ -105,7 +134,7 @@ mFileHandle(fp)
 	{
 		if (!aFilename)
 			return INVALID_PARAMETER;
-		mFileHandle = fopen(aFilename, "rb");
+		mFileHandle = soloud_fopen(std::string(aFilename), "rb");
 		if (!mFileHandle)
 			return FILE_NOT_FOUND;
 		return SO_NO_ERROR;

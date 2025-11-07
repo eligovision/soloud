@@ -29,4 +29,10 @@ IF (SOLOUD_BUILD_DEMOS)
 	include (demos.cmake)
 endif ()
 
+# UTF8 file handling
+if (SOLOUD_WITH_UTF8)
+	message("[+] Soloud UTF8 support for filepaths")
+    add_compile_definitions(SOLOUD_WITH_UTF8)
+endif()
+
 include (InstallExport)
