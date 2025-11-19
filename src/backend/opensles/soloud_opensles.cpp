@@ -57,7 +57,7 @@ namespace SoLoud
    printf( _msg )
 #endif
 
-#define NUM_BUFFERS 2
+#define NUM_BUFFERS 8
 
 namespace SoLoud
 {
