@@ -185,7 +185,14 @@ namespace SoLoud
 	{
 		BackendData *data = static_cast<BackendData*>(aSoloud->mBackendData);
 		if (data->stopThread())
+		{
+			// clear buffers
+			const int bufferSizeBytes = data->bufferSize * data->channels * sizeof(short);
+			for (int idx = 0; idx < NUM_BUFFERS; ++idx)
+				memset(data->outputBuffers[idx], 0, bufferSizeBytes);
+
 			return 0;
+		}
 
 		return UNKNOWN_ERROR;
 	}
